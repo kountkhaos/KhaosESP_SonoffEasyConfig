@@ -108,8 +108,8 @@ Connect to Router with these settings:<br>
 
     HTMLPage += "</td></tr><tr><td align='right'>MQTT Broker Password:</td><td colspan='4'><input type='password' id='mqtt_broker_password' name='mqtt_broker_password' value=''></td></tr>";
 
-    if ( cfg_args_err != "" ){
-        HTMLPage += "<tr><td colspan='5' align='center'>" + cfg_args_err + "</td></tr>";
+    if ( hasErrCfg == true ){
+        HTMLPage += "<tr><td colspan='5' align='center'>Config has errors</td></tr>";
     }
 
     HTMLPage += "<tr><td colspan='5' align='center'><input type='submit' value='Submit'></td></tr></table></form>";
@@ -139,7 +139,8 @@ void cfg_args_parse()
 
     if (server.args() > 0 ) // Save Settings
     {
-        cfg_args_err = "";
+        hasErrCfg = false;
+        clearErrorConfig();
         s_arg     = "";
         s_argName = "";
 
@@ -169,151 +170,134 @@ void cfg_args_parse()
 
             if (s_argName == "device_name"){
                 if ( checkStringStd(s_arg) ) config.DeviceName = s_arg;
-                else cfg_args_err = cfg_args_err + "{device_name : Invalid}";
+                else {
+                    hasErrCfg = true;
+                    errConfig.DeviceName = EP_STD_TOO_LONG;
+                }
             }
 
             if (s_argName == "device_username"){
                 if ( checkStringStd(s_arg) ) config.DeviceUsername = s_arg;
-                else cfg_args_err = cfg_args_err + "{device_username : Invalid}";
+                else {
+                    hasErrCfg = true;
+                    errConfig.DeviceUsername = EP_STD_TOO_LONG;
+"Too long ( > 128 )";
+                }
             }
 
-            if (s_argName == "device_password"){
-                if ( checkStringStd(s_arg)
-                    && (s_arg.length() > 5 || s_arg.length() == 0)
-                ){
-                    if ( s_arg.length() > 0) config.DevicePassword = s_arg;
-                }
+            if (s_argName == "device_password" && s_arg.length() > 0 ){
+                if ( checkStringStd(s_arg) && s_arg.length() > 5 ) config.DevicePassword = s_arg;
                 else {
-                    cfg_args_err = cfg_args_err + "{device_password : Invalid}";
+                    hasErrCfg = true;
+                    errConfig.DevicePassword = EP_STD_TOO_LONG + " or too short ( < 6 )";
                 }
             }
 
             if (s_argName == "ssid"){
                 if ( checkSSID(s_arg) ) config.ssid = s_arg;
-                else cfg_args_err = cfg_args_err + "{ssid : Invalid}";
+                else {
+                    hasErrCfg = true;
+                    errConfig.ssid = "Too long ( > " + String(EP_32_LEN) + " ) or invalid SSID chars";
+                }
             }
 
-            if (s_argName == "ssid_password"){
-                if ( s_arg.length() > 0 && checkStringStd(s_arg) )
-                    config.ssid_password = s_arg;
+            if (s_argName == "ssid_password" && s_arg.length() > 0){
+                if ( checkStringStd(s_arg) ) config.ssid_password = s_arg;
                 else {
-                    cfg_args_err = cfg_args_err + "{ssid_password : Invalid}";
+                    hasErrCfg = true;
+                    errConfig.ssid_password = EP_STD_TOO_LONG;
                 }
             }
 
             if (s_argName == "mqtt_broker_topic"){
                 if ( checkStringStd(s_arg) ) config.MQTTBrokerTopic = s_arg;
-                else cfg_args_err = cfg_args_err + "{mqtt_broker_topic : Invalid}";
+                else {
+                    hasErrCfg = true;
+                    errConfig.MQTTBrokerTopic = EP_STD_TOO_LONG;
+                }
             }
 
             if (s_argName == "mqtt_broker_username"){
                 if ( checkStringStd(s_arg) ) config.MQTTBrokerUsername = s_arg;
-                else cfg_args_err = cfg_args_err + "{mqtt_broker_username : Invalid}";
+                else {
+                    hasErrCfg = true;
+                    errConfig.MQTTBrokerUsername = EP_STD_TOO_LONG;
+                }
             }
 
-            if (s_argName == "mqtt_broker_password"){
-                if ( s_arg.length() > 0 && checkStringStd(s_arg) )
-                    config.MQTTBrokerPassword = s_arg;
+// TODO need some way of blanking an mqtt password. The below could be an issue.
+            if (s_argName == "mqtt_broker_password" && s_arg.length() > 0 ){
+                if ( checkStringStd(s_arg) ) config.MQTTBrokerPassword = s_arg;
                 else {
-                    cfg_args_err = cfg_args_err + "{mqtt_broker_password : Invalid}";
+                    hasErrCfg = true;
+                    errConfig.MQTTBrokerPassword = EP_STD_TOO_LONG;
                 }
             }
 
             if (s_argName == "mqtt_broker_port"){
                 if ( check_uint16_t(s_arg) ) config.MQTTBrokerPort = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{mqtt_broker_port : Invalid}";
+                else {
+                    hasErrCfg = true;
+                    errConfig.MQTTBrokerPort = "Invalid, 0 to 65535 only";
+                }
             }
 
             if (s_argName == "dhcp") config.dhcp = true;
 
-            if (s_argName == "ip_0"){
-                if( checkIPOctet(s_arg) ) config.IP[0] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{ip_0 : Invalid}";
-            }
-            if (s_argName == "ip_1"){
-                if( checkIPOctet(s_arg) ) config.IP[1] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{ip_1 : Invalid}";
-            }
-            if (s_argName == "ip_2"){
-                if( checkIPOctet(s_arg) ) config.IP[2] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{ip_2 : Invalid}";
-            }
-            if (s_argName == "ip_3"){
-                if( checkIPOctet(s_arg) ) config.IP[3] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{ip_3 : Invalid}";
-            }
+            for ( uint8_t z = 0 ; z < 4; z++ ){
+                if (s_argName == "ip_" + String(z) ){
+                    if( checkIPOctet(s_arg) ) config.IP[z] = s_arg.toInt();
+                    else {
+                        hasErrCfg = true;
+                        errConfig.IP[z] = "0 to 255 only";
+                    }
+                }
 
-            if (s_argName == "nm_0"){
-                if( checkIPOctet(s_arg) ) config.Netmask[0] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{nm_0 : Invalid}";
-            }
-            if (s_argName == "nm_1"){
-                if( checkIPOctet(s_arg) ) config.Netmask[1] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{nm_1 : Invalid}";
-            }
-            if (s_argName == "nm_2"){
-                if( checkIPOctet(s_arg) ) config.Netmask[2] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{nm_2 : Invalid}";
-            }
-            if (s_argName == "nm_3"){
-                if( checkIPOctet(s_arg) ) config.Netmask[3] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{nm_3 : Invalid}";
-            }
+                if (s_argName == "nm_" + String(z) ){
+                    if( checkIPOctet(s_arg) ) config.Netmask[z] = s_arg.toInt();
+                    else {
+                        hasErrCfg = true;
+                        errConfig.Netmask[z] = "0 to 255 only";
+                    }
+                }
 
-            if (s_argName == "gw_0"){
-                if( checkIPOctet(s_arg) ) config.Gateway[0] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{gw_0 : Invalid}";
-            }
-            if (s_argName == "gw_1"){
-                if( checkIPOctet(s_arg) ) config.Gateway[1] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{gw_1 : Invalid}";
-            }
-            if (s_argName == "gw_2"){
-                if( checkIPOctet(s_arg) ) config.Gateway[2] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{gw_2 : Invalid}";
-            }
-            if (s_argName == "gw_3"){
-                if( checkIPOctet(s_arg) ) config.Gateway[3] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{gw_3 : Invalid}";
-            }
+                if (s_argName == "gw_" + String(z) ){
+                    if( checkIPOctet(s_arg) ) config.Gateway[z] = s_arg.toInt();
+                    else {
+                        hasErrCfg = true;
+                        errConfig.Gateway[z] = "0 to 255 only";
+                    }
+                }
 
-            if (s_argName == "mqttip_0"){
-                if( checkIPOctet(s_arg) ) config.MQTTBrokerIP[0] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{mqttip_0 : Invalid}";
-            }
-            if (s_argName == "mqttip_1"){
-                if( checkIPOctet(s_arg) ) config.MQTTBrokerIP[1] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{mqttip_1 : Invalid}";
-            }
-            if (s_argName == "mqttip_2"){
-                if( checkIPOctet(s_arg) ) config.MQTTBrokerIP[2] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{mqttip_2 : Invalid}";
-            }
-            if (s_argName == "mqttip_3"){
-                if( checkIPOctet(s_arg) ) config.MQTTBrokerIP[3] = s_arg.toInt();
-                else cfg_args_err = cfg_args_err + "{mqttip_3 : Invalid}";
+                if (s_argName == "mqttip_" + String(z) ){
+                    if( checkIPOctet(s_arg) ) config.MQTTBrokerIP[z] = s_arg.toInt();
+                    else {
+                        hasErrCfg = true;
+                        errConfig.MQTTBrokerIP[z] = "0 to 255 only";
+                    }
+                }
             }
 
         }
 
         if ( config.DevicePassword == DEFAULT_DEVICE_PASSWORD ){
-            cfg_args_err = cfg_args_err
-                + "{device_password : Invalid : still '"+DEFAULT_DEVICE_PASSWORD+"'}";
+            hasErrCfg = true;
+            errConfig.DevicePassword = "Device Password is still '"+DEFAULT_DEVICE_PASSWORD+"'";
         }
 
     } else {
-        cfg_args_err = cfg_args_err + "{error : no-args}";
+        hasErrCfg = true;
+        // TODO fix this some to display in webform somehow.
     }
 
     print_Config();
 
 
-    if ( cfg_args_err != "" ){
-        Serial.println(" config args invalid : " + cfg_args_err );
+    if ( hasErrCfg == true ){
+        Serial.println(" config args invalid ");
 
 // TODO this is here until i get tempConfig copying for the config page :
         ReadConfig();
-        print_Config();
 
     } else {
 
@@ -326,7 +310,7 @@ void handlePOSTConfigPage()
 {
     cfg_args_parse();
 
-    if ( cfg_args_err == "" ){
+    if ( hasErrCfg == false ){
         server.send ( 200, "text/html", PAGE_WaitAndReload );
         WriteConfig();
         ConfigureWifiStartWeb();

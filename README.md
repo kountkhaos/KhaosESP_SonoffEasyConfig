@@ -40,13 +40,24 @@ THIS IS STILL WORK IN PROGRESS ( and all the above isn't fully complete yet )
 
 Eventually this will :
 
-1) send and receive mqtt messages. ( with encryption , if possible )
-2) have Web user login (sessions, random cookies) to stop anyone from changing things.
-3) hopefully have SSL on the webserver (if possible)
-4) Be able to read DS18b20 temperature sensors on one of the spare pins.
+1) have Web user login (sessions, random cookies) to stop anyone from changing things.
+2) send and receive mqtt messages. ( with encryption , if possible )
+3) Be able to read DS18b20 temperature sensors on one of the spare pins.
     ( and send regular mqtt updates )
-5) have the other spare pins doing something.
-6) OTA (maybe)
+4) have the other spare pins doing something.
+6) OTA updates (maybe)
+
+7) Web config form show errors by highlighting the field.
+8) Web config form to store the unsaved changes in tempConfig,
+    only get submitted when all entries are okay.
+
+9) hopefully have SSL on the webserver (if possible)
+10) WPS mode if button is held for 4 seconds,
+    (led off, goes on when in WPS mode)
+   AP mode if held for 8 seconds.
+    (led flashing every 1/4 sec when in AP mode)
+   Default Config if held for 12 seconds.
+    (led permanently on)
 
 
 

@@ -43,17 +43,15 @@ int WifiConnectWaitCount = 0;
 String HTMLPage = ""; // used by page generating subs.
 
 // used by configuration page
-String cfg_args_err = "";
-String s_arg     = "";
-String s_argName = "";
+boolean hasErrCfg = false;
+String  s_arg     = "";
+String  s_argName = "";
 
 struct strConfig {
 
         boolean AccessPointEnabled;
         boolean dhcp;
         boolean defaultConfig;
-
-        uint8_t gpio12RelayValue;
 
         byte  IP[4];
         byte  Netmask[4];
@@ -73,6 +71,60 @@ struct strConfig {
         String DevicePassword;
 
 } config, tempConfig;
+
+struct strErrorConfig {
+
+        String AccessPointEnabled;
+        String dhcp;
+        String defaultConfig;
+
+        String IP[4];
+        String Netmask[4];
+        String Gateway[4];
+        String MQTTBrokerIP[4];
+
+        String MQTTBrokerPort;
+
+        String ssid;
+        String ssid_password;
+
+        String MQTTBrokerTopic;
+        String MQTTBrokerUsername;
+        String MQTTBrokerPassword;
+        String DeviceName;
+        String DeviceUsername;
+        String DevicePassword;
+
+} errConfig;
+
+void clearErrorConfig(){
+
+    errConfig.AccessPointEnabled = "";
+    errConfig.dhcp               = "";
+    errConfig.defaultConfig      = "";
+
+    for( int z = 0 ; z < 4 ; z++ ){
+        errConfig.IP[z]           = "";
+        errConfig.Netmask[z]      = "";
+        errConfig.Gateway[z]      = "";
+        errConfig.MQTTBrokerIP[z] = "";
+    }
+
+    errConfig.MQTTBrokerPort     = "";
+
+    errConfig.ssid               = "";
+    errConfig.ssid_password      = "";
+
+    errConfig.MQTTBrokerTopic    = "";
+    errConfig.MQTTBrokerUsername = "";
+    errConfig.MQTTBrokerPassword = "";
+    errConfig.DeviceName         = "";
+    errConfig.DeviceUsername     = "";
+    errConfig.DevicePassword     = "";
+
+}
+
+
 // TODO tempConfig not yet in use.
 
 String DEFAULT_DEVICE_PASSWORD = "password";
@@ -98,6 +150,8 @@ String  DEFAULT_SSID         = "MYSSID";
 
 int EP_32_LEN      = 32;
 int EP_STD_STR_LEN = 48;
+
+String EP_STD_TOO_LONG = "Too long ( > " + String(EP_STD_STR_LEN) + " )";
 
 //
 #define RESET_AP_PRESS_TIMEOUT 12  // 1/4 of seconds . So 12 * 0.25 = 3 secs.
