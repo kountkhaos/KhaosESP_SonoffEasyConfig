@@ -45,9 +45,9 @@ void setup ( void ) {
     Serial.println("Starting ES8266");
     Serial.println("***************");
 
-    pinMode( ledPin, OUTPUT );
+    pinMode( gpio13GreenLED, OUTPUT );
     pinMode( gpio12Relay, OUTPUT );
-    pinMode( Reset_WIFI_AP_Pin, INPUT_PULLUP );
+    pinMode( gpio0Button, INPUT_PULLUP );
 
 
     if (!ReadConfig()) DefaultConfig();

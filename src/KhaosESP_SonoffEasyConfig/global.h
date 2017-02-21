@@ -5,18 +5,13 @@
 
 ESP8266WebServer server(80); // The Webserver
 
-int WIFI_AP_Mode_Count       = 0;  // counter for LED when in AP mode.
+int LED_FLASH_QTR_SEC_COUNT = 0;
 
-// TODO prefix all gpio defs with well "gpio" ...
-
-// TODO rename this gpio13GreenLED
-int ledPin                   = 13; // Sonoff green led is on 13. indicator led gpio pin.
+int gpio13GreenLED          = 13; // Sonoff green led is on 13. indicator led gpio pin.
 // Sonoff Red LED is only for the 433MHz add on board.
 
-// TODO rename this gpio13GreenLEDValue :
-int ledPinValue              = 0;
+int gpio13GreenLEDValue              = 0;
 
-// TODO rename this to gpio12Relay
 int gpio12Relay              = 12; // Sonoff Relay is on 12.
 int gpio12RelayValue         = 0; // Sonoff Relay is on 12.
 
@@ -26,10 +21,11 @@ int gpio3RXD                 = 3; //  Sonoff This is also the UART RXD pin
 int gpio1TXD                 = 1; //  Sonoff This is also the UART TXD pin
 
 // TODO rename this gpio0Button
-int Reset_WIFI_AP_Pin        = 0;  // Sonoff button is on 0. reset to AP mode button gpio pin.
+int gpio0Button        = 0;  // Sonoff button is on 0. reset to AP mode button gpio pin.
 
 int Button_PressCount = 0;  // 1/4 second count of how long its been pressed.
 boolean Button_HasToggledRelay       = false;
+boolean Button_HasToggledWPS         = false; //Not yet implemented.
 boolean Button_HasAccessPointEnabled = false;
 boolean Button_HasDefaultConfiged    = false;
 
@@ -154,11 +150,11 @@ int EP_STD_STR_LEN = 48;
 String EP_STD_TOO_LONG = "Too long ( > " + String(EP_STD_STR_LEN) + " )";
 
 //
-#define RESET_AP_PRESS_TIMEOUT 12  // 1/4 of seconds . So 12 * 0.25 = 3 secs.
-#define RESET_DEFAULT_CONFIG_PRESS_TIMEOUT 24  // 1/4 of seconds . So 24 * 0.25 = 6 secs.
+#define BUTTON_WPS_PRESS_COUNT            16  // 1/4 of seconds. So 16 / 4 = 4 secs.
+#define BUTTON_AP_PRESS_COUNT             32  // 1/4 of seconds. So 32 / 4 = 8 secs.
+#define BUTTON_DEFAULT_CONFIG_PRESS_COUNT 48  // 1/4 of seconds. So 48 / 4 = 12 secs.
 
-#define WIFI_STA_LED_BLINK     0   // 1/4 sec count between led blinks
-#define WIFI_AP_LED_BLINK      12  // 1/4 sec count between led blinks
+#define WIFI_AP_LED_BLINK                 12  // 1/4 sec x 12 = 3 secs between led blinks
 
 void stopWebserver()
 {
@@ -610,17 +606,27 @@ boolean ReadConfig()
 }
 
 void Qtr_Second_Tick() {
-    WIFI_AP_Mode_Count++;
+    LED_FLASH_QTR_SEC_COUNT++;
     Button_PressCount++;
 }
 
 void toggle_led(){
-    if ( ledPinValue == LOW ){
-        digitalWrite(ledPin, HIGH);
-        ledPinValue = HIGH;
+
+    gpio13GreenLEDValue = digitalRead(gpio13GreenLED);
+
+    if ( gpio13GreenLEDValue == LOW ){
+        digitalWrite(gpio13GreenLED, HIGH);
+        gpio13GreenLEDValue = HIGH;
     } else {
-        digitalWrite(ledPin, LOW);
-        ledPinValue = LOW;
+        digitalWrite(gpio13GreenLED, LOW);
+        gpio13GreenLEDValue = LOW;
+    }
+}
+
+void toggle_led_every_qtr_sec (){
+    if ( LED_FLASH_QTR_SEC_COUNT > 0 ) {
+        LED_FLASH_QTR_SEC_COUNT = 0 ;
+        toggle_led();
     }
 }
 
@@ -648,35 +654,51 @@ void SwitchTo_WIFI_AP_STA_MODE(){
 
 void pollButtonSetLED(){
 
-    if ( digitalRead( Reset_WIFI_AP_Pin ) == LOW ) {
+    if ( digitalRead( gpio0Button ) == LOW ) {
         // button is being pressed.
 
-        digitalWrite(ledPin, HIGH);
-        ledPinValue = HIGH;
+        // LED output indication :
+        if ( Button_PressCount > BUTTON_DEFAULT_CONFIG_PRESS_COUNT){
+            // > 12 secs
+            digitalWrite(gpio13GreenLED, HIGH);
+            gpio13GreenLEDValue = HIGH;
 
+        } else if ( Button_PressCount > BUTTON_AP_PRESS_COUNT ){
+            // > 8 secs
+            toggle_led_every_qtr_sec();
+
+        } else if ( Button_PressCount > BUTTON_WPS_PRESS_COUNT ){
+            // > 4 secs
+            digitalWrite(gpio13GreenLED, LOW);
+            gpio13GreenLEDValue = LOW;
+
+        } else {
+            // < 4 secs
+            digitalWrite(gpio13GreenLED, HIGH);
+            gpio13GreenLEDValue = HIGH;
+        }
+
+        // Do the action for the press duration :
         if ( Button_HasToggledRelay == false){
             toggle_relay();
             Button_HasToggledRelay = true;
         }
 
-        if ( Button_PressCount > RESET_AP_PRESS_TIMEOUT ){
-            digitalWrite(ledPin, LOW);
-            ledPinValue = LOW;
+        if ( Button_PressCount > BUTTON_WPS_PRESS_COUNT
+            && Button_HasToggledWPS == false
+        ){
+            Button_HasToggledWPS = true;
+            Serial.println("WPS Mode NOT YET IMPLEMENTED. TODO");
         }
 
-        if ( Button_PressCount > RESET_DEFAULT_CONFIG_PRESS_TIMEOUT){
-            digitalWrite(ledPin, HIGH);
-            ledPinValue = HIGH;
-        }
-
-        if ( Button_PressCount > RESET_AP_PRESS_TIMEOUT
+        if ( Button_PressCount > BUTTON_AP_PRESS_COUNT
             && Button_HasAccessPointEnabled  == false
         ){
             Button_HasAccessPointEnabled = true;
             SwitchTo_WIFI_AP_STA_MODE();
         }
 
-        if ( Button_PressCount > RESET_DEFAULT_CONFIG_PRESS_TIMEOUT
+        if ( Button_PressCount > BUTTON_DEFAULT_CONFIG_PRESS_COUNT
             && Button_HasDefaultConfiged == false
         ){
             Button_HasDefaultConfiged = true;
@@ -685,15 +707,16 @@ void pollButtonSetLED(){
 
     } else {
         Button_PressCount = 0;
+        Button_HasToggledWPS         = false;
         Button_HasAccessPointEnabled = false;
         Button_HasDefaultConfiged    = false;
         Button_HasToggledRelay       = false;
 
         if ( config.AccessPointEnabled ){
-            // blink led about every 1.5 seconds when in AP mode.
+            // blink led about every 3 seconds when in AP mode.
 
-            if ( WIFI_AP_Mode_Count > WIFI_AP_LED_BLINK ){
-                WIFI_AP_Mode_Count = 0;
+            if ( LED_FLASH_QTR_SEC_COUNT > WIFI_AP_LED_BLINK ){
+                LED_FLASH_QTR_SEC_COUNT = 0;
                 toggle_led();
             }
 
@@ -701,21 +724,16 @@ void pollButtonSetLED(){
 
             if ( WiFi.status() != WL_CONNECTED ) {
                 // blink led every 1/4 second when trying to connect to a router.
-
-                if ( WIFI_AP_Mode_Count > WIFI_STA_LED_BLINK ) {
-                    WIFI_AP_Mode_Count = 0 ;
-                    toggle_led();
-                }
+                toggle_led_every_qtr_sec();
 
             } else {
                 // so happily connected in WIFI_STA mode the LED is off.
                 // TODO could here use LED to display the state of the relay ...
-                digitalWrite(ledPin, LOW);
-                ledPinValue = LOW;
+                digitalWrite(gpio13GreenLED, LOW);
+                gpio13GreenLEDValue = LOW;
             }
         }
     }
 }
-
 
 #endif
