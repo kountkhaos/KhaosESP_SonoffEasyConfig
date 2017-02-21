@@ -10,10 +10,7 @@ int LED_FLASH_QTR_SEC_COUNT = 0;
 int gpio13GreenLED          = 13; // Sonoff green led is on 13. indicator led gpio pin.
 // Sonoff Red LED is only for the 433MHz add on board.
 
-int gpio13GreenLEDValue              = 0;
-
 int gpio12Relay              = 12; // Sonoff Relay is on 12.
-int gpio12RelayValue         = 0; // Sonoff Relay is on 12.
 
 int gpio14                   = 14; // Sonoff spare pin at the end of where the FTDI serial pins are.
 
@@ -611,16 +608,9 @@ void Qtr_Second_Tick() {
 }
 
 void toggle_led(){
-
-    gpio13GreenLEDValue = digitalRead(gpio13GreenLED);
-
-    if ( gpio13GreenLEDValue == LOW ){
-        digitalWrite(gpio13GreenLED, HIGH);
-        gpio13GreenLEDValue = HIGH;
-    } else {
-        digitalWrite(gpio13GreenLED, LOW);
-        gpio13GreenLEDValue = LOW;
-    }
+    if ( digitalRead(gpio13GreenLED) == LOW )
+         digitalWrite(gpio13GreenLED, HIGH);
+    else digitalWrite(gpio13GreenLED, LOW);
 }
 
 void toggle_led_every_qtr_sec (){
@@ -632,14 +622,12 @@ void toggle_led_every_qtr_sec (){
 
 void toggle_relay(){
     // TODO send an MQTT message if that's enabled.
-    if ( gpio12RelayValue == LOW ){
+    if ( digitalRead(gpio12Relay) == LOW ){
         Serial.println("Relay Toggled ON by button");
         digitalWrite(gpio12Relay, HIGH);
-        gpio12RelayValue = HIGH;
     } else {
         Serial.println("Relay Toggled OFF by button");
         digitalWrite(gpio12Relay, LOW);
-        gpio12RelayValue = LOW;
     }
 }
 
@@ -661,7 +649,6 @@ void pollButtonSetLED(){
         if ( Button_PressCount > BUTTON_DEFAULT_CONFIG_PRESS_COUNT){
             // > 12 secs
             digitalWrite(gpio13GreenLED, HIGH);
-            gpio13GreenLEDValue = HIGH;
 
         } else if ( Button_PressCount > BUTTON_AP_PRESS_COUNT ){
             // > 8 secs
@@ -670,12 +657,10 @@ void pollButtonSetLED(){
         } else if ( Button_PressCount > BUTTON_WPS_PRESS_COUNT ){
             // > 4 secs
             digitalWrite(gpio13GreenLED, LOW);
-            gpio13GreenLEDValue = LOW;
 
         } else {
             // < 4 secs
             digitalWrite(gpio13GreenLED, HIGH);
-            gpio13GreenLEDValue = HIGH;
         }
 
         // Do the action for the press duration :
@@ -730,7 +715,6 @@ void pollButtonSetLED(){
                 // so happily connected in WIFI_STA mode the LED is off.
                 // TODO could here use LED to display the state of the relay ...
                 digitalWrite(gpio13GreenLED, LOW);
-                gpio13GreenLEDValue = LOW;
             }
         }
     }
