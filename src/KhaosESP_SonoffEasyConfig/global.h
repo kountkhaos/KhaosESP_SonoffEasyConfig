@@ -67,14 +67,10 @@ struct strConfig {
 
 struct strErrorConfig {
 
-        String AccessPointEnabled;
-        String dhcp;
-        String defaultConfig;
-
-        String IP[4];
-        String Netmask[4];
-        String Gateway[4];
-        String MQTTBrokerIP[4];
+        String IP;
+        String Netmask;
+        String Gateway;
+        String MQTTBrokerIP;
 
         String MQTTBrokerPort;
 
@@ -92,16 +88,10 @@ struct strErrorConfig {
 
 void clearErrorConfig(){
 
-    errConfig.AccessPointEnabled = "";
-    errConfig.dhcp               = "";
-    errConfig.defaultConfig      = "";
-
-    for( int z = 0 ; z < 4 ; z++ ){
-        errConfig.IP[z]           = "";
-        errConfig.Netmask[z]      = "";
-        errConfig.Gateway[z]      = "";
-        errConfig.MQTTBrokerIP[z] = "";
-    }
+    errConfig.IP                 = "";
+    errConfig.Netmask            = "";
+    errConfig.Gateway            = "";
+    errConfig.MQTTBrokerIP       = "";
 
     errConfig.MQTTBrokerPort     = "";
 

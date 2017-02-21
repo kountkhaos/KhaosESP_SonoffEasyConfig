@@ -41,6 +41,9 @@ String get_wifi_networks_options()
 //    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
 //    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 
+//String TABLE = "<table border='1' cellspacing='0' cellpadding='3' align='center'>";
+//String TABLE_MID = "</table>" + TABLE;
+
 String generate_config_page()
 {
 
@@ -50,69 +53,110 @@ String generate_config_page()
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 &nbsp;&nbsp;
-<strong>Configuration</strong>
-<hr>
-Connect to Router with these settings:<br>
+
+<style>
+
+td {
+    font-size: 23px;
+}
+
+input {
+    font-size: 18px;
+}
+
+select {
+    font-size: 18px;
+}
+
+.err {
+    color: white;
+    background-color: red;
+}
+
+.fname {
+    font-weight: bold;
+}
+
+.maintitle {
+    background-color: lightblue;
+    font-weight: bold;
+}
+
+</style>
+
 <form action="/cfg" method="POST">
-    <table border="0" cellspacing="0" cellpadding="3" >
+<table border='0' cellspacing='0' cellpadding='3' align='center'>
+
+<tr><td class = 'maintitle' colspan='4'>Configuration</td></tr>
+ 
 )=====";
+    if ( hasErrCfg == true ){
+        HTMLPage += "<tr><td class='err' colspan='4'>Config has errors. See below</td></tr>";
+    }
 
-    HTMLPage += "</td></tr><tr><td align='right'>Device Name:</td><td colspan='4'><input type='input' id='device_name' name='device_name' value='" + (String) config.DeviceName + "'></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>Device Name:</td></tr><tr><td colspan='4'><input type='input' id='device_name' name='device_name' value='" + (String) config.DeviceName + "'></td></tr>";
+    if (errConfig.DeviceName != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.DeviceName + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>Device Username:</td><td colspan='4'><input type='input' id='device_username' name='device_username' value='" + (String) config.DeviceUsername + "'></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>Device Username:</td></tr><tr><td colspan='4'><input type='input' id='device_username' name='device_username' value='" + (String) config.DeviceUsername + "'></td></tr>";
+    if (errConfig.DeviceUsername != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.DeviceUsername + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>Device Password:</td><td colspan='4'><input type='password' id='device_password' name='device_password' value=''></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>Device Password:</td></tr><tr><td colspan='4'><input type='password' id='device_password' name='device_password' value=''></td></tr>";
+    if (errConfig.DevicePassword != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.DevicePassword + "</td></tr>";
 
-    HTMLPage += "<tr><td align='right'>SSID:</td><td colspan='4'><select id='ssid' name='ssid' value="">";
+    HTMLPage += "<tr><td class='fname' colspan='4'>SSID:</td></tr><tr><td colspan='4'><select id='ssid' name='ssid' value="">";
     HTMLPage += get_wifi_networks_options() + "</select>";
+    if (errConfig.ssid != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.ssid + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>SSID Password:</td><td colspan='4'><input type='password' id='ssid_password' name='ssid_password' value=''></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>SSID Password:</td></tr><tr><td colspan='4'><input type='password' id='ssid_password' name='ssid_password' value=''></td></tr>";
+    if (errConfig.ssid_password != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.ssid_password + "</td></tr>";
 
-    HTMLPage += "<tr><td align='right'>DHCP:</td><td><input type='checkbox' id='dhcp' name='dhcp' ";
+    HTMLPage += "<tr><td class='fname'>DHCP:</td><td><input type='checkbox' id='dhcp' name='dhcp' ";
     if ( config.dhcp == true ) HTMLPage += "checked";
-
     HTMLPage += "></td></tr>";
 
     int i = 0 ;
-    HTMLPage += "<tr><td align='right'>IP:</td>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>IP:</td></tr><tr>";
     for ( i = 0 ; i < 4; i++ ){
-        HTMLPage += "<td><input type='text' id='ip_" + (String) i +"' name='ip_" + (String) i +"' size='3' value='" + (String) config.IP[i]  + "'></td>";
+        HTMLPage += "<td><input type='text' id='ip_" + (String) i +"' name='ip_" + (String) i +"' size='2' value='" + (String) config.IP[i]  + "'></td>";
     }
     HTMLPage += "</tr>";
+    if (errConfig.IP != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.IP + "</td></tr>";
 
-    HTMLPage += "<tr><td align='right'>NetMask:</td>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>NetMask:</td></tr><tr>";
     for ( i = 0 ; i < 4; i++ ){
-        HTMLPage += "<td><input type='text' id='nm_" + (String) i +"' name='nm_" + (String) i +"' size='3' value='" + (String) config.Netmask[i]  + "'></td>";
+        HTMLPage += "<td><input type='text' id='nm_" + (String) i +"' name='nm_" + (String) i +"' size='2' value='" + (String) config.Netmask[i]  + "'></td>";
     }
     HTMLPage += "</tr>";
+    if (errConfig.Netmask != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.Netmask + "</td></tr>";
 
-    HTMLPage += "<tr><td align='right'>Gateway:</td>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>Gateway:</td></tr><tr>";
     for ( i = 0 ; i < 4; i++ ){
-        HTMLPage += "<td><input type='text' id='gw_" + (String) i +"' name='gw_" + (String) i +"' size='3' value='" + (String) config.Gateway[i]  + "'></td>";
+        HTMLPage += "<td><input type='text' id='gw_" + (String) i +"' name='gw_" + (String) i +"' size='2' value='" + (String) config.Gateway[i]  + "'></td>";
     }
     HTMLPage += "</tr>";
+    if (errConfig.Gateway != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.Gateway + "</td></tr>";
 
 
-    HTMLPage += "<tr><td align='right'>MQTT Broker IP:</td>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Broker IP:</td></tr><tr>";
     for ( i = 0 ; i < 4; i++ ){
-        HTMLPage += "<td><input type='text' id='mqttip_" + (String) i +"' name='mqttip_" + (String) i +"' size='3' value='" + (String) config.MQTTBrokerIP[i]  + "'></td>";
+        HTMLPage += "<td><input type='text' id='mqttip_" + (String) i +"' name='mqttip_" + (String) i +"' size='2' value='" + (String) config.MQTTBrokerIP[i]  + "'></td>";
     }
     HTMLPage += "</tr>";
+    if (errConfig.MQTTBrokerIP != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTBrokerIP + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>MQTT Broker Port:</td><td colspan='4'><input type='input' id='mqtt_broker_port' name='mqtt_broker_port' value='"+ (String) config.MQTTBrokerPort + "'></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Broker Port:</td></tr><tr><td colspan='4'><input type='input' id='mqtt_broker_port' name='mqtt_broker_port' value='"+ (String) config.MQTTBrokerPort + "'></td></tr>";
+    if (errConfig.MQTTBrokerPort != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTBrokerPort + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>MQTT Broker Topic:</td><td colspan='4'><input type='input' id='mqtt_broker_topic' name='mqtt_broker_topic' value='" + (String) config.MQTTBrokerTopic + "'></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Broker Topic:</td></tr><tr><td colspan='4'><input type='input' id='mqtt_broker_topic' name='mqtt_broker_topic' value='" + (String) config.MQTTBrokerTopic + "'></td></tr>";
+    if (errConfig.MQTTBrokerTopic != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTBrokerTopic + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>MQTT Broker Username:</td><td colspan='4'><input type='input' id='mqtt_broker_username' name='mqtt_broker_username' value='" + (String) config.MQTTBrokerUsername + "'></td></tr>";
+    HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Broker Username:</td></tr><tr><td colspan='4'><input type='input' id='mqtt_broker_username' name='mqtt_broker_username' value='" + (String) config.MQTTBrokerUsername + "'></td></tr>";
+    if (errConfig.MQTTBrokerUsername != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTBrokerUsername + "</td></tr>";
 
+    HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Broker Password:</td></tr><tr><td colspan='4'><input type='password' id='mqtt_broker_password' name='mqtt_broker_password' value=''></td></tr>";
+    if (errConfig.MQTTBrokerPassword != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTBrokerPassword + "</td></tr>";
 
-    HTMLPage += "</td></tr><tr><td align='right'>MQTT Broker Password:</td><td colspan='4'><input type='password' id='mqtt_broker_password' name='mqtt_broker_password' value=''></td></tr>";
-
-    if ( hasErrCfg == true ){
-        HTMLPage += "<tr><td colspan='5' align='center'>Config has errors</td></tr>";
-    }
-
-    HTMLPage += "<tr><td colspan='5' align='center'><input type='submit' value='Submit'></td></tr></table></form>";
+    HTMLPage += "<tr><td class='fname' colspan='4'><input type='submit' value='Submit'></td></tr></table></form>";
 
     return HTMLPage;
 }
@@ -181,7 +225,6 @@ void cfg_args_parse()
                 else {
                     hasErrCfg = true;
                     errConfig.DeviceUsername = EP_STD_TOO_LONG;
-"Too long ( > 128 )";
                 }
             }
 
@@ -249,7 +292,7 @@ void cfg_args_parse()
                     if( checkIPOctet(s_arg) ) config.IP[z] = s_arg.toInt();
                     else {
                         hasErrCfg = true;
-                        errConfig.IP[z] = "0 to 255 only";
+                        errConfig.IP = "0 to 255 only";
                     }
                 }
 
@@ -257,7 +300,7 @@ void cfg_args_parse()
                     if( checkIPOctet(s_arg) ) config.Netmask[z] = s_arg.toInt();
                     else {
                         hasErrCfg = true;
-                        errConfig.Netmask[z] = "0 to 255 only";
+                        errConfig.Netmask = "0 to 255 only";
                     }
                 }
 
@@ -265,7 +308,7 @@ void cfg_args_parse()
                     if( checkIPOctet(s_arg) ) config.Gateway[z] = s_arg.toInt();
                     else {
                         hasErrCfg = true;
-                        errConfig.Gateway[z] = "0 to 255 only";
+                        errConfig.Gateway = "0 to 255 only";
                     }
                 }
 
@@ -273,11 +316,10 @@ void cfg_args_parse()
                     if( checkIPOctet(s_arg) ) config.MQTTBrokerIP[z] = s_arg.toInt();
                     else {
                         hasErrCfg = true;
-                        errConfig.MQTTBrokerIP[z] = "0 to 255 only";
+                        errConfig.MQTTBrokerIP = "0 to 255 only";
                     }
                 }
             }
-
         }
 
         if ( config.DevicePassword == DEFAULT_DEVICE_PASSWORD ){
@@ -287,11 +329,9 @@ void cfg_args_parse()
 
     } else {
         hasErrCfg = true;
-        // TODO fix this some to display in webform somehow.
     }
 
     print_Config();
-
 
     if ( hasErrCfg == true ){
         Serial.println(" config args invalid ");
