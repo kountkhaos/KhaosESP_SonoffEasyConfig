@@ -156,6 +156,14 @@ select {
     HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Broker Password:</td></tr><tr><td colspan='4'><input type='password' id='mqtt_broker_password' name='mqtt_broker_password' value=''></td></tr>";
     if (errConfig.MQTTBrokerPassword != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTBrokerPassword + "</td></tr>";
 
+    HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Update Seconds:</td></tr><tr><td colspan='4'><input type='text' id='mqtt_update_secs' name='mqtt_update_secs' value='"+String( config.MQTTUpdateQtrSecs / 4 )+"'></td></tr>";
+    if (errConfig.MQTTBrokerPassword != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTUpdateQtrSecs + "</td></tr>";
+
+    HTMLPage += "<tr><td colspan='4' class='fname'>DS18B20 Therm GPIO-14:</td><td><input type='checkbox' id='ds18b20_therm' name='ds18b20_therm' ";
+    if ( config.ds18b20_therm == true ) HTMLPage += "checked";
+    HTMLPage += "></td></tr>";
+
+
     HTMLPage += "<tr><td class='fname' colspan='4'><input type='submit' value='Submit'></td></tr></table></form>";
 
     return HTMLPage;
@@ -196,6 +204,7 @@ void cfg_args_parse()
         config.AccessPointEnabled = false;
         config.defaultConfig      = false;
         config.dhcp               = false;
+        config.ds18b20_therm      = false;
 
 // TODO really need to get config.dhcp setting first.
 // If dhcp is true then the IP, Netmask and Gateway don't really need to report errors.
@@ -252,6 +261,14 @@ void cfg_args_parse()
                 }
             }
 
+            if (s_argName == "mqtt_update_secs"){
+                if ( check_mqtt_update_secs(s_arg) ) config.MQTTUpdateQtrSecs = s_arg.toInt() * 4;
+                else {
+                    hasErrCfg = true;
+                    errConfig.MQTTUpdateQtrSecs = "0 to " + String(MQTT_UPDATE_MAX_SECS);
+                }
+            }
+
             if (s_argName == "mqtt_broker_topic"){
                 if ( checkStringStd(s_arg) ) config.MQTTBrokerTopic = s_arg;
                 else {
@@ -286,6 +303,7 @@ void cfg_args_parse()
             }
 
             if (s_argName == "dhcp") config.dhcp = true;
+            if (s_argName == "ds18b20_therm") config.ds18b20_therm = true;
 
             for ( uint8_t z = 0 ; z < 4; z++ ){
                 if (s_argName == "ip_" + String(z) ){
@@ -353,6 +371,8 @@ void handlePOSTConfigPage()
     if ( hasErrCfg == false ){
         server.send ( 200, "text/html", PAGE_WaitAndReload );
         WriteConfig();
+
+    // TODO only restart the wifi if the config for ssid/ssid_password , access point enabled has actually changed.
         ConfigureWifiStartWeb();
     } else {
         server.send ( 400, "text/html", generate_config_page() );

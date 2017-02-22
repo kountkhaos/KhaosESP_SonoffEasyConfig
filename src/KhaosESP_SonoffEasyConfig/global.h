@@ -44,12 +44,15 @@ struct strConfig {
 
         boolean AccessPointEnabled;
         boolean dhcp;
+        boolean ds18b20_therm;
         boolean defaultConfig;
 
         byte  IP[4];
         byte  Netmask[4];
         byte  Gateway[4];
         byte  MQTTBrokerIP[4];
+
+        uint32_t MQTTUpdateQtrSecs;
 
         uint16_t MQTTBrokerPort;
 
@@ -71,6 +74,8 @@ struct strErrorConfig {
         String Netmask;
         String Gateway;
         String MQTTBrokerIP;
+
+        String MQTTUpdateQtrSecs;
 
         String MQTTBrokerPort;
 
@@ -95,6 +100,8 @@ void clearErrorConfig(){
 
     errConfig.MQTTBrokerPort     = "";
 
+    errConfig.MQTTUpdateQtrSecs  = "";
+
     errConfig.ssid               = "";
     errConfig.ssid_password      = "";
 
@@ -106,6 +113,9 @@ void clearErrorConfig(){
     errConfig.DevicePassword     = "";
 
 }
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 
 // TODO tempConfig not yet in use.
@@ -121,15 +131,17 @@ String  DEFAULT_SSID         = "MYSSID";
 #define DEFAULT_SSID_PASSWORD  "MYPASSWORD"
 
 // EEPROM Address constants
-#define EPA_M_PORT          48
-#define EPA_WF_SSID         52  // 32 chars
-#define EPA_WF_PASS         86
-#define EPA_M_TOPIC         136
-#define EPA_M_USER          186
-#define EPA_M_PASS          236
-#define EPA_DEVICE_NAME     286
-#define EPA_DEVICE_USERNAME 336
-#define EPA_DEVICE_PASSWORD 386
+#define EPA_M_PORT           48
+#define EPA_WF_SSID          52  // 32 bytes
+#define EPA_WF_PASS          86
+#define EPA_M_TOPIC          136
+#define EPA_M_USER           186
+#define EPA_M_PASS           236
+#define EPA_DEVICE_NAME      286
+#define EPA_DEVICE_USERNAME  336
+#define EPA_DEVICE_PASSWORD  386 // 48 bytes
+#define EPA_MQTT_UPDATE_SECS 436 // 4  bytes
+
 
 int EP_32_LEN      = 32;
 int EP_STD_STR_LEN = 48;
@@ -142,6 +154,9 @@ String EP_STD_TOO_LONG = "Too long ( > " + String(EP_STD_STR_LEN) + " )";
 #define BUTTON_DEFAULT_CONFIG_PRESS_COUNT 48  // 1/4 of seconds. So 48 / 4 = 12 secs.
 
 #define WIFI_AP_LED_BLINK                 12  // 1/4 sec x 12 = 3 secs between led blinks
+
+uint32_t MQTT_Update_Count = 0;  // 1/4 second count of how long since last update.
+#define MQTT_UPDATE_MAX_SECS 1000000000
 
 void stopWebserver()
 {
@@ -192,6 +207,17 @@ boolean check_uint16_t(String Value) {
     // TODO also return false if value can't be cast to an int.
 
     if (Value.toInt() < 0 || Value.toInt() > 65535) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+boolean check_mqtt_update_secs(String Value) {
+
+    // uint32_t of 1/4 secs.
+    // TODO also return false if value can't be cast to an int.
+    if (Value.toInt() < 0 || Value.toInt() > MQTT_UPDATE_MAX_SECS ) {
         return false;
     } else {
         return true;
@@ -252,7 +278,6 @@ String  ReadStringFromEEPROM(int beginaddress, int s_len) {
     return retString;
 }
 
-// TODO should "address" be a long ?
 void EEPROMWrite_uint16_t(int address, uint16_t value) {
     byte two = (value & 0xFF);
     byte one = ((value >> 8) & 0xFF);
@@ -262,13 +287,37 @@ void EEPROMWrite_uint16_t(int address, uint16_t value) {
     EEPROM.write(address + 1, one);
 }
 
-uint16_t EEPROMRead_uint16_t(long address) {
+uint16_t EEPROMRead_uint16_t(int address) {
     //Read the 2 bytes from the eeprom memory.
     uint16_t two = EEPROM.read(address);
     uint16_t one = EEPROM.read(address + 1);
 
     //Return the recomposed long by using bitshift.
     return ((two << 0) & 0xFF) + ((one << 8) & 0xFFFF) ;
+}
+
+void EEPROMWrite_uint32_t(int address, uint32_t value) {
+    byte four  = (value & 0xFF);
+    byte three = ((value >> 8) & 0xFF);
+    byte two   = ((value >> 16) & 0xFF);
+    byte one   = ((value >> 24) & 0xFF);
+
+    //Write the 4 bytes into the eeprom memory.
+    EEPROM.write(address, four);
+    EEPROM.write(address + 1, three);
+    EEPROM.write(address + 2, two);
+    EEPROM.write(address + 3, one);
+}
+
+uint32_t EEPROMRead_uint32_t(int address) {
+    //Read the 4 bytes from the eeprom memory.
+    long four  = EEPROM.read(address);
+    long three = EEPROM.read(address + 1);
+    long two   = EEPROM.read(address + 2);
+    long one   = EEPROM.read(address + 3);
+
+    //Return the recomposed long by using bitshift.
+    return ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) + ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
 }
 
 String GetMacAddress() {
@@ -340,6 +389,7 @@ void print_Config() {
     Serial.println("    config.AccessPointEnabled :" + (String) config.AccessPointEnabled);
 
     Serial.println("    config.dhcp               :" + (String) config.dhcp);
+    Serial.println("    config.ds18b20_therm(io14):" + (String) config.ds18b20_therm);
     print_Config_IP("    ");
 
     Serial.println("    config.MQTTBrokerIP       :"
@@ -358,6 +408,8 @@ void print_Config() {
     Serial.println("    config.MQTTBrokerTopic    :" + (String) config.MQTTBrokerTopic);
     Serial.println("    config.MQTTBrokerUsername :" + (String) config.MQTTBrokerUsername);
     Serial.println("    config.MQTTBrokerPassword :" + (String) config.MQTTBrokerPassword);
+
+    Serial.println("    config.MQTTUpdateQtrSecs  :" + (String) config.MQTTUpdateQtrSecs);
 
     Serial.println("    config.DeviceName         :" + (String) config.DeviceName);
     Serial.println("    config.DeviceUsername     :" + (String) config.DeviceUsername);
@@ -452,6 +504,10 @@ void WriteConfig()
     EEPROM.write(2,'G');
 
     // TODO is this correct/best way to write booleans ?
+
+    if ( config.ds18b20_therm == true ) EEPROM.write(28,1);
+    else EEPROM.write(28, 0);
+
     if ( config.defaultConfig == true ) EEPROM.write(29,1);
     else EEPROM.write(29, 0);
 
@@ -494,6 +550,8 @@ void WriteConfig()
     WriteStringToEEPROM(EPA_DEVICE_USERNAME, config.DeviceUsername);
     WriteStringToEEPROM(EPA_DEVICE_PASSWORD, config.DevicePassword);
 
+    EEPROMWrite_uint32_t(EPA_MQTT_UPDATE_SECS, config.MQTTUpdateQtrSecs);
+
     EEPROM.commit();
 
     delay(100);
@@ -505,8 +563,9 @@ void DefaultConfig()
     config.ssid          = DEFAULT_SSID;
     config.ssid_password = DEFAULT_SSID_PASSWORD;
 
-    config.defaultConfig = true;
+    config.defaultConfig      = true;
     config.AccessPointEnabled = true;
+    config.ds18b20_therm      = false;
     config.dhcp  = true;
     config.IP[0] = 192;
     config.IP[1] = 168;
@@ -532,6 +591,8 @@ void DefaultConfig()
     config.MQTTBrokerUsername = "";
     config.MQTTBrokerPassword = "";
 
+    config.MQTTUpdateQtrSecs = 0;
+
     config.DeviceName     = "MySonoffDevice";
     config.DeviceUsername = "admin";
     config.DevicePassword = DEFAULT_DEVICE_PASSWORD;
@@ -547,6 +608,7 @@ boolean ReadConfig()
     if (EEPROM.read(0) == 'C' && EEPROM.read(1) == 'F'  && EEPROM.read(2) == 'G' ){
         Serial.println("Configurarion Found");
 
+        config.ds18b20_therm      = !! EEPROM.read(28);
         config.defaultConfig      = !! EEPROM.read(29);
         config.AccessPointEnabled = !! EEPROM.read(30);
         config.dhcp               = !! EEPROM.read(31);
@@ -584,6 +646,8 @@ boolean ReadConfig()
         config.DeviceUsername = ReadStringFromEEPROM(EPA_DEVICE_USERNAME, EP_STD_STR_LEN);
         config.DevicePassword = ReadStringFromEEPROM(EPA_DEVICE_PASSWORD, EP_STD_STR_LEN);
 
+        config.MQTTUpdateQtrSecs = EEPROMRead_uint32_t(EPA_MQTT_UPDATE_SECS);
+
         print_Config();
         return true;
     } else {
@@ -595,6 +659,7 @@ boolean ReadConfig()
 void Qtr_Second_Tick() {
     LED_FLASH_QTR_SEC_COUNT++;
     Button_PressCount++;
+    MQTT_Update_Count++;
 }
 
 void toggle_led(){
@@ -709,5 +774,21 @@ void pollButtonSetLED(){
         }
     }
 }
+
+void pollMQTTUpdate() {
+
+    if ( config.MQTTUpdateQtrSecs == 0 || config.MQTTUpdateQtrSecs > MQTT_Update_Count )
+        return;
+
+    MQTT_Update_Count = 0;
+
+    Serial.println("MQTT periodic update . TODO needs implementing");
+
+    // TODO : this will see if the ds18b20_therm is enabled. If it is it will be sent in the update.
+    // will also send the state of the relay.
+
+
+}
+
 
 #endif
