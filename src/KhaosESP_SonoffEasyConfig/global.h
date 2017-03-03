@@ -3,6 +3,7 @@
 
 // TODO const uint8_t for the below pin settings ?
 
+//ESP8266WebServer *server; // The Webserver
 ESP8266WebServer server(80); // The Webserver
 
 int LED_FLASH_QTR_SEC_COUNT = 0;
@@ -50,7 +51,9 @@ struct strConfig {
         byte  IP[4];
         byte  Netmask[4];
         byte  Gateway[4];
+
         byte  MQTTBrokerIP[4];
+        String MQTTBrokerIPStr;
 
         uint32_t MQTTUpdateQtrSecs;
 
@@ -116,6 +119,8 @@ void clearErrorConfig(){
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+#define PSCLIENT_TIMEOUT_QTR_SEC 8
+int PSClient_qtr_sec_count = 0;
 
 
 // TODO tempConfig not yet in use.
@@ -158,10 +163,24 @@ String EP_STD_TOO_LONG = "Too long ( > " + String(EP_STD_STR_LEN) + " )";
 uint32_t MQTT_Update_Count = 0;  // 1/4 second count of how long since last update.
 #define MQTT_UPDATE_MAX_SECS 1000000000
 
+String mqtt_client_str   = "";
+String mqtt_topic_status = ""; // for status updates from esp8266
+String mqtt_topic_cmnd   = ""; // for commands to esp8266
+
 void stopWebserver()
 {
     server.close();
 }
+
+// predeclare's in this file :
+void set_mqtt_client();
+void sendMQTTStatus();
+void mqtt_callback(char* topic, byte* payload, unsigned int length);
+void connectMQTTPubSubClient();
+
+// predeclare from PAGE_NetworkConfiguration.h :
+void handleGETConfigPage();
+void handlePOSTConfigPage();
 
 void handleRoot() {
     Serial.println("handling web : root ");
@@ -173,17 +192,9 @@ void handlePageNotFound() {
     server.send(404, "text/html", "<h1>Page Not Found</h1>");
 }
 
-// predeclare from PAGE_NetworkConfiguration.h :
-// void   send_network_configuration_html();
-// String generate_config_page();
-void handleGETConfigPage();
-void handlePOSTConfigPage();
-
 void startWebserver(){
 
     server.on("/",     handleRoot );
-
-//    server.on("/cfg", handleGETConfigPage );
 
     server.on("/cfg", HTTP_GET, [](){
         handleGETConfigPage();
@@ -261,7 +272,6 @@ void WriteStringToEEPROM(int beginaddress, String string)
         EEPROM.write(beginaddress + t,charBuf[t]);
     }
 }
-
 
 String  ReadStringFromEEPROM(int beginaddress, int s_len) {
     byte counter=0;
@@ -492,8 +502,27 @@ void ConfigureWifiStartWeb() {
             Serial.println("IP address: ");
             Serial.println(WiFi.localIP());
             startWebserver();
+            set_mqtt_client();
+            connectMQTTPubSubClient();
         }
     }
+}
+
+
+void set_mqtt_client()
+{
+
+     config.MQTTBrokerIPStr =
+                String( config.MQTTBrokerIP[0] )
+        + "." + String( config.MQTTBrokerIP[1] )
+        + "." + String( config.MQTTBrokerIP[2] )
+        + "." + String( config.MQTTBrokerIP[3] );
+
+    Serial.println("Setting MQTT client : " + config.MQTTBrokerIPStr + ":" + String(config.MQTTBrokerPort));
+
+    client.setServer( config.MQTTBrokerIPStr.c_str() , config.MQTTBrokerPort );
+    client.setCallback(mqtt_callback);
+
 }
 
 void WriteConfig()
@@ -552,6 +581,10 @@ void WriteConfig()
 
     EEPROMWrite_uint32_t(EPA_MQTT_UPDATE_SECS, config.MQTTUpdateQtrSecs);
 
+    mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
+    mqtt_topic_status = "status/"  + config.MQTTBrokerTopic ;
+    mqtt_topic_cmnd   = "cmnd/"    + config.MQTTBrokerTopic ;
+
     EEPROM.commit();
 
     delay(100);
@@ -596,6 +629,10 @@ void DefaultConfig()
     config.DeviceName     = "MySonoffDevice";
     config.DeviceUsername = "admin";
     config.DevicePassword = DEFAULT_DEVICE_PASSWORD;
+
+    mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
+    mqtt_topic_status = "status/"  + config.MQTTBrokerTopic ;
+    mqtt_topic_cmnd   = "cmnd/"    + config.MQTTBrokerTopic ;
 
     WriteConfig();
     Serial.println("Default Config applied");
@@ -648,7 +685,12 @@ boolean ReadConfig()
 
         config.MQTTUpdateQtrSecs = EEPROMRead_uint32_t(EPA_MQTT_UPDATE_SECS);
 
+        mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
+        mqtt_topic_status = "status/"  + config.MQTTBrokerTopic ;
+        mqtt_topic_cmnd   = "cmnd/"    + config.MQTTBrokerTopic ;
+
         print_Config();
+
         return true;
     } else {
         Serial.println("Configurarion NOT FOUND!!!!");
@@ -660,6 +702,7 @@ void Qtr_Second_Tick() {
     LED_FLASH_QTR_SEC_COUNT++;
     Button_PressCount++;
     MQTT_Update_Count++;
+    PSClient_qtr_sec_count++;
 }
 
 void toggle_led(){
@@ -684,6 +727,9 @@ void toggle_relay(){
         Serial.println("Relay Toggled OFF by button");
         digitalWrite(gpio12Relay, LOW);
     }
+
+    sendMQTTStatus();
+
 }
 
 void SwitchTo_WIFI_AP_STA_MODE(){
@@ -762,8 +808,9 @@ void pollButtonSetLED(){
 
         } else {
 
-            if ( WiFi.status() != WL_CONNECTED ) {
-                // blink led every 1/4 second when trying to connect to a router.
+            if ( WiFi.status() != WL_CONNECTED || ! client.connected() ){
+                // blink led every 1/4 second when not connected to a router.
+                // or to mqtt server.
                 toggle_led_every_qtr_sec();
 
             } else {
@@ -775,18 +822,116 @@ void pollButtonSetLED(){
     }
 }
 
-void pollMQTTUpdate() {
+void mqtt_callback(char* topic, byte* payload, unsigned int length)
+{
 
+    Serial.println(" ******** in mqtt_callback");
+
+
+    Serial.print("Message arrived [");
+    Serial.print(topic);
+    Serial.print("] ");
+    for (int i = 0; i < length; i++) {
+        Serial.print((char)payload[i]);
+    }
+    Serial.println();
+
+    toggle_relay();
+
+}
+
+/*
+  // Switch on the LED if an 1 was received as first character
+  if ((char)payload[0] == '0') {
+    digitalWrite(relay_pin, LOW);   // Turn the LED on (Note that LOW is the voltage level
+    Serial.println("relay_pin -> LOW");
+    relayState = LOW;
+    EEPROM.write(0, relayState);    // Write state to EEPROM
+    EEPROM.commit();
+  } else if ((char)payload[0] == '1') {
+    digitalWrite(relay_pin, HIGH);  // Turn the LED off by making the voltage HIGH
+    Serial.println("relay_pin -> HIGH");
+    relayState = HIGH;
+    EEPROM.write(0, relayState);    // Write state to EEPROM
+    EEPROM.commit();
+  } else if ((char)payload[0] == '2') {
+    relayState = !relayState;
+    digitalWrite(relay_pin, relayState);  // Turn the LED off by making the voltage HIGH
+    Serial.print("relay_pin -> switched to ");
+    Serial.println(relayState);
+    EEPROM.write(0, relayState);    // Write state to EEPROM
+    EEPROM.commit();
+  }
+*/
+
+
+void connectMQTTPubSubClient()
+{
+
+    if ( config.AccessPointEnabled ) return;
+
+    PSClient_qtr_sec_count = 0;
+
+    while ( !client.connected() ){
+
+        if (config.MQTTBrokerUsername == ""){
+            Serial.print("Attempting MQTT connection ...");
+            client.connect(mqtt_client_str.c_str() );
+        } else {
+            Serial.print("Attempting MQTT connection (with username/password) ...");
+            client.connect(
+                mqtt_client_str.c_str(),
+                config.MQTTBrokerUsername.c_str(),
+                config.MQTTBrokerPassword.c_str()
+            );
+        }
+
+        if ( client.connected() ){
+
+            client.publish( mqtt_topic_status.c_str(), String(mqtt_client_str + " connected").c_str() );
+
+            client.subscribe( mqtt_topic_cmnd.c_str() );
+
+            Serial.println("connected");
+            return;
+        } else {
+            Serial.print("failed, rc=");
+            Serial.print(client.state());
+            delay(50);
+
+            if ( PSClient_qtr_sec_count > PSCLIENT_TIMEOUT_QTR_SEC ){
+                Serial.println("failed connect to mqtt. timed out");
+                return;
+            }
+        }
+    }
+}
+
+void pollMQTTUpdate()
+{
     if ( config.MQTTUpdateQtrSecs == 0 || config.MQTTUpdateQtrSecs > MQTT_Update_Count )
         return;
 
+    Serial.println("MQTT periodic update . TODO needs fully implementing");
+    sendMQTTStatus();
+
+}
+
+void sendMQTTStatus()
+{
     MQTT_Update_Count = 0;
 
-    Serial.println("MQTT periodic update . TODO needs implementing");
+    if ( !client.connected() ) connectMQTTPubSubClient();
+    if ( !client.connected() ) return;
+
+    if ( digitalRead(gpio12Relay) == LOW ){
+        client.publish( mqtt_topic_status.c_str(), "Relay is OFF");
+    } else {
+        client.publish( mqtt_topic_status.c_str(), "Relay is ON");
+    }
 
     // TODO : this will see if the ds18b20_therm is enabled. If it is it will be sent in the update.
     // will also send the state of the relay.
-
 
 }
 

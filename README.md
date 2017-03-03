@@ -5,19 +5,20 @@ Karl "Kount-Khaos" Hoskin : 17th February 2017.
 
 This is not yet finished.
 
-The idea 
+The idea
 --------
 
 The button :
 
     quick click : briefly pressing it will toggle the relay
 
-    3 secs :  holding it down for about 3 secs will reset it into Wifi Access Point mode.
+    $ secs :  holding it down for about 4 secs will reset it into WPS mode.
+    8 secs :  holding it down for about 8 secs will reset it into Wifi Access Point mode.
         Where it broadcasts on
             SSID : ESP8266
             password : password
 
-    6 secs :  it will restore the default config.
+    12 secs : it will restore the default config.
 
 
 When in Access Point Mode.
@@ -62,4 +63,9 @@ Eventually this will :
     (led permanently on)
 
 (-) OTA updates (maybe)
+
+
+
+https://github.com/bblanchon/ArduinoJson/tree/master/examples
+
 

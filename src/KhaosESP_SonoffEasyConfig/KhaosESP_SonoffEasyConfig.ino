@@ -23,16 +23,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 //#include <OneWire.h>
 //#include <DallasTemperature.h>
+#include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
+//#include <WiFiClient.h>
 #include <Ticker.h>
 #include <EEPROM.h>
-#include <WiFiUdp.h>
-#include <ArduinoJson.h>
-#include "ESP8266TrueRandom.h"
+#include <ESP8266WebServer.h>
+//#include <WiFiUdp.h>
+//#include <ArduinoJson.h>
+//#include "ESP8266TrueRandom.h"
 
 #include "global.h"
 #include "PAGE_Configuration.h"
@@ -58,6 +58,7 @@ void setup ( void ) {
 
     ConfigureWifiStartWeb();
 
+
     tkQtrSecond.attach_ms(250, Qtr_Second_Tick);
 }
 
@@ -65,7 +66,9 @@ void loop ( void ) {
 
     pollButtonSetLED();
     pollMQTTUpdate();
+
     server.handleClient();
+    if (client.connected()) client.loop();
 
     /*
     *    Your Code here
