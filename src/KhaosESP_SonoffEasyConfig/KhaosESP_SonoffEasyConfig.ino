@@ -30,9 +30,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 #include <Ticker.h>
 #include <EEPROM.h>
 #include <ESP8266WebServer.h>
-//#include <WiFiUdp.h>
-//#include <ArduinoJson.h>
-//#include "ESP8266TrueRandom.h"
+// #include <WiFiUdp.h>
+// #include <ArduinoJson.h>
+// #include "ESP8266TrueRandom.h"
 
 #include "global.h"
 #include "PAGE_Configuration.h"
@@ -69,10 +69,6 @@ void loop ( void ) {
 
     server.handleClient();
     if (client.connected()) client.loop();
-
-    /*
-    *    Your Code here
-    */
 
     // yield();
 }

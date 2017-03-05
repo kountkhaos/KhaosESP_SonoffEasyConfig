@@ -27,7 +27,6 @@ boolean Button_HasToggledWPS         = false; //Not yet implemented.
 boolean Button_HasAccessPointEnabled = false;
 boolean Button_HasDefaultConfiged    = false;
 
-boolean Refresh              = false; // For Main Loop, to refresh things like GPIO / WS2812
 Ticker  tkQtrSecond;                  // Quarter Second ticker. For LED flashing
 
 #define WIFI_CONNECT_DELAY   500
@@ -718,18 +717,22 @@ void toggle_led_every_qtr_sec (){
     }
 }
 
-void toggle_relay(){
-    // TODO send an MQTT message if that's enabled.
-    if ( digitalRead(gpio12Relay) == LOW ){
-        Serial.println("Relay Toggled ON by button");
-        digitalWrite(gpio12Relay, HIGH);
-    } else {
-        Serial.println("Relay Toggled OFF by button");
-        digitalWrite(gpio12Relay, LOW);
-    }
-
+void relay_on(){
+    Serial.println("Relay ON");
+    digitalWrite(gpio12Relay, HIGH);
     sendMQTTStatus();
+}
 
+void relay_off(){
+    Serial.println("Relay OFF");
+    digitalWrite(gpio12Relay, LOW);
+    sendMQTTStatus();
+}
+
+void relay_toggle(){
+    Serial.println("Relay Toggled by button");
+    if ( digitalRead(gpio12Relay) == LOW ) relay_on();
+    else relay_off();
 }
 
 void SwitchTo_WIFI_AP_STA_MODE(){
@@ -766,7 +769,7 @@ void pollButtonSetLED(){
 
         // Do the action for the press duration :
         if ( Button_HasToggledRelay == false){
-            toggle_relay();
+            relay_toggle();
             Button_HasToggledRelay = true;
         }
 
@@ -825,45 +828,35 @@ void pollButtonSetLED(){
 void mqtt_callback(char* topic, byte* payload, unsigned int length)
 {
 
-    Serial.println(" ******** in mqtt_callback");
+    Serial.println("mqtt_callback : received message ... ");
+    // max message is status or toggle, they're 6 chars so :
+    if ( length > 8 ){
+        Serial.println(" message is too long : " + String(length) );
+        client.publish( mqtt_topic_status.c_str(), "{\"error\":\"message too long\"}");
+        return;
+    }
 
+    String msg = "";
+
+    for (int i = 0; i < length; i++) {
+        msg = msg + (char)payload[i];
+    }
 
     Serial.print("Message arrived [");
     Serial.print(topic);
     Serial.print("] ");
-    for (int i = 0; i < length; i++) {
-        Serial.print((char)payload[i]);
-    }
-    Serial.println();
+    Serial.println( msg );
 
-    toggle_relay();
+    if      ( msg == "on"     ) relay_on();
+    else if ( msg == "off"    ) relay_off();
+    else if ( msg == "toggle" ) relay_toggle();
+    else if ( msg == "status" ) sendMQTTStatus();
+    else {
+        Serial.println("Bad message" + msg );
+        client.publish( mqtt_topic_status.c_str(), String("{\"error\":\"bad message ["+ msg +"]\"}").c_str() );
+    }
 
 }
-
-/*
-  // Switch on the LED if an 1 was received as first character
-  if ((char)payload[0] == '0') {
-    digitalWrite(relay_pin, LOW);   // Turn the LED on (Note that LOW is the voltage level
-    Serial.println("relay_pin -> LOW");
-    relayState = LOW;
-    EEPROM.write(0, relayState);    // Write state to EEPROM
-    EEPROM.commit();
-  } else if ((char)payload[0] == '1') {
-    digitalWrite(relay_pin, HIGH);  // Turn the LED off by making the voltage HIGH
-    Serial.println("relay_pin -> HIGH");
-    relayState = HIGH;
-    EEPROM.write(0, relayState);    // Write state to EEPROM
-    EEPROM.commit();
-  } else if ((char)payload[0] == '2') {
-    relayState = !relayState;
-    digitalWrite(relay_pin, relayState);  // Turn the LED off by making the voltage HIGH
-    Serial.print("relay_pin -> switched to ");
-    Serial.println(relayState);
-    EEPROM.write(0, relayState);    // Write state to EEPROM
-    EEPROM.commit();
-  }
-*/
-
 
 void connectMQTTPubSubClient()
 {
@@ -912,7 +905,7 @@ void pollMQTTUpdate()
     if ( config.MQTTUpdateQtrSecs == 0 || config.MQTTUpdateQtrSecs > MQTT_Update_Count )
         return;
 
-    Serial.println("MQTT periodic update . TODO needs fully implementing");
+    Serial.println("MQTT periodic update.");
     sendMQTTStatus();
 
 }
@@ -924,11 +917,11 @@ void sendMQTTStatus()
     if ( !client.connected() ) connectMQTTPubSubClient();
     if ( !client.connected() ) return;
 
-    if ( digitalRead(gpio12Relay) == LOW ){
-        client.publish( mqtt_topic_status.c_str(), "Relay is OFF");
-    } else {
-        client.publish( mqtt_topic_status.c_str(), "Relay is ON");
-    }
+    String relay_state = "";
+    if ( digitalRead(gpio12Relay) == LOW ) relay_state = "off";
+    else relay_state = "on";
+
+    client.publish( mqtt_topic_status.c_str(), String("{\"relay\":\"" + relay_state +"\"}").c_str() );
 
     // TODO : this will see if the ds18b20_therm is enabled. If it is it will be sent in the update.
     // will also send the state of the relay.
