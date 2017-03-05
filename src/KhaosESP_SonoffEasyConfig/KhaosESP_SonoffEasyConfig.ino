@@ -30,11 +30,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 #include <Ticker.h>
 #include <EEPROM.h>
 #include <ESP8266WebServer.h>
-// #include <WiFiUdp.h>
+#include <WiFiUdp.h>
+#include <TimeLib.h>
 // #include <ArduinoJson.h>
 // #include "ESP8266TrueRandom.h"
 
 #include "global.h"
+#include "time_sync.h"
 #include "PAGE_Configuration.h"
 
 void setup ( void ) {
@@ -53,13 +55,13 @@ void setup ( void ) {
     pinMode( gpio12Relay, OUTPUT );
     pinMode( gpio0Button, INPUT_PULLUP );
 
+    tkQtrSecond.attach_ms(250, Qtr_Second_Tick);
 
     if (!ReadConfig()) DefaultConfig();
 
     ConfigureWifiStartWeb();
 
 
-    tkQtrSecond.attach_ms(250, Qtr_Second_Tick);
 }
 
 void loop ( void ) {

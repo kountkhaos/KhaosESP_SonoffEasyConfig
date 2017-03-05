@@ -69,3 +69,36 @@ Eventually this will :
 https://github.com/bblanchon/ArduinoJson/tree/master/examples
 
 
+
+mqtt json message format.
+
+#status
+
+{
+    "relay" : "on" ,     # ( or  "off" )
+    "temperature-<DS18B20-addr>" : 21.5  , ( degrees C )
+    "temperature-<DS18B20-addr>" : 20.5  , ( degrees C )
+    "input3" : "on" ,     # ( or "off" )
+    "input1" : "on" ,     # ( or "off" )
+    "epoch_time" : 14000000,
+
+}
+
+# control message
+{
+    "relay" : "on",  # ( "on" , "off" or "toggle" )
+}
+
+or just send one of these :
+    on
+    off
+    toggle
+    status
+
+
+
+
+
+
+
+

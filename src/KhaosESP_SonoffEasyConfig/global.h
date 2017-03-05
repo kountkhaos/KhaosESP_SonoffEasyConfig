@@ -3,6 +3,11 @@
 
 // TODO const uint8_t for the below pin settings ?
 
+// predeclare from time_sync.h
+void setupNTPSync();
+String now_rfc3339_utc();
+time_t now_if_synced();
+
 //ESP8266WebServer *server; // The Webserver
 ESP8266WebServer server(80); // The Webserver
 
@@ -32,6 +37,8 @@ Ticker  tkQtrSecond;                  // Quarter Second ticker. For LED flashing
 #define WIFI_CONNECT_DELAY   500
 #define WIFI_CONNECT_TIMEOUT_COUNT 12
 int WifiConnectWaitCount = 0;
+
+String relay_last_operation_by = "boot"; // message , button or boot
 
 String HTMLPage = ""; // used by page generating subs.
 
@@ -68,6 +75,8 @@ struct strConfig {
         String DeviceUsername;
         String DevicePassword;
 
+        String ntpServerName;
+
 } config, tempConfig;
 
 struct strErrorConfig {
@@ -91,6 +100,8 @@ struct strErrorConfig {
         String DeviceUsername;
         String DevicePassword;
 
+        String ntpServerName;
+
 } errConfig;
 
 void clearErrorConfig(){
@@ -113,14 +124,17 @@ void clearErrorConfig(){
     errConfig.DeviceName         = "";
     errConfig.DeviceUsername     = "";
     errConfig.DevicePassword     = "";
+    errConfig.ntpServerName      = "";
 
 }
+
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 #define PSCLIENT_TIMEOUT_QTR_SEC 8
 int PSClient_qtr_sec_count = 0;
-
+time_t mqtt_last_connect_fail = 0;
+#define MQTT_RETRY_CONNECT_TIMEOUT 30
 
 // TODO tempConfig not yet in use.
 
@@ -501,6 +515,7 @@ void ConfigureWifiStartWeb() {
             Serial.println("IP address: ");
             Serial.println(WiFi.localIP());
             startWebserver();
+            setupNTPSync();
             set_mqtt_client();
             connectMQTTPubSubClient();
         }
@@ -578,6 +593,10 @@ void WriteConfig()
     WriteStringToEEPROM(EPA_DEVICE_USERNAME, config.DeviceUsername);
     WriteStringToEEPROM(EPA_DEVICE_PASSWORD, config.DevicePassword);
 
+    //TODO FIXME . This needs to go into the web config page :
+    // and to be written to EEPROM here 
+    //config.ntpServerName = "2.uk.pool.ntp.org";
+
     EEPROMWrite_uint32_t(EPA_MQTT_UPDATE_SECS, config.MQTTUpdateQtrSecs);
 
     mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
@@ -629,12 +648,15 @@ void DefaultConfig()
     config.DeviceUsername = "admin";
     config.DevicePassword = DEFAULT_DEVICE_PASSWORD;
 
+    config.ntpServerName = "2.uk.pool.ntp.org";
+
     mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
     mqtt_topic_status = "status/"  + config.MQTTBrokerTopic ;
     mqtt_topic_cmnd   = "cmnd/"    + config.MQTTBrokerTopic ;
 
     WriteConfig();
     Serial.println("Default Config applied");
+
 
 }
 
@@ -682,6 +704,9 @@ boolean ReadConfig()
         config.DeviceUsername = ReadStringFromEEPROM(EPA_DEVICE_USERNAME, EP_STD_STR_LEN);
         config.DevicePassword = ReadStringFromEEPROM(EPA_DEVICE_PASSWORD, EP_STD_STR_LEN);
 
+    //TODO FIXME . This needs to go into the web config page :
+    config.ntpServerName = "2.uk.pool.ntp.org";
+
         config.MQTTUpdateQtrSecs = EEPROMRead_uint32_t(EPA_MQTT_UPDATE_SECS);
 
         mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
@@ -718,19 +743,19 @@ void toggle_led_every_qtr_sec (){
 }
 
 void relay_on(){
-    Serial.println("Relay ON");
+    Serial.println("Relay ON : by " + relay_last_operation_by );
     digitalWrite(gpio12Relay, HIGH);
     sendMQTTStatus();
 }
 
 void relay_off(){
-    Serial.println("Relay OFF");
+    Serial.println("Relay OFF : by " + relay_last_operation_by );
     digitalWrite(gpio12Relay, LOW);
     sendMQTTStatus();
 }
 
 void relay_toggle(){
-    Serial.println("Relay Toggled by button");
+    Serial.println("Relay Toggled ... ");
     if ( digitalRead(gpio12Relay) == LOW ) relay_on();
     else relay_off();
 }
@@ -769,6 +794,7 @@ void pollButtonSetLED(){
 
         // Do the action for the press duration :
         if ( Button_HasToggledRelay == false){
+            relay_last_operation_by = "button";
             relay_toggle();
             Button_HasToggledRelay = true;
         }
@@ -847,9 +873,18 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length)
     Serial.print("] ");
     Serial.println( msg );
 
-    if      ( msg == "on"     ) relay_on();
-    else if ( msg == "off"    ) relay_off();
-    else if ( msg == "toggle" ) relay_toggle();
+    if ( msg == "on" ){
+        relay_last_operation_by = "message";
+        relay_on();
+    }
+    else if ( msg == "off" ){
+        relay_last_operation_by = "message";
+        relay_off();
+    }
+    else if ( msg == "toggle" ){
+        relay_last_operation_by = "message";
+        relay_toggle();
+    }
     else if ( msg == "status" ) sendMQTTStatus();
     else {
         Serial.println("Bad message" + msg );
@@ -863,15 +898,23 @@ void connectMQTTPubSubClient()
 
     if ( config.AccessPointEnabled ) return;
 
+    // for when time sync isn't working :
+    if ( mqtt_last_connect_fail > 0 &&
+         mqtt_last_connect_fail <=  ( MQTT_RETRY_CONNECT_TIMEOUT *10 )
+    ) mqtt_last_connect_fail--;
+
+    if ( mqtt_last_connect_fail > 0 &&
+        mqtt_last_connect_fail  + MQTT_RETRY_CONNECT_TIMEOUT > now_if_synced()) return;
+
     PSClient_qtr_sec_count = 0;
 
     while ( !client.connected() ){
 
         if (config.MQTTBrokerUsername == ""){
-            Serial.print("Attempting MQTT connection ...");
+            Serial.println( now_rfc3339_utc() + " : Attempting MQTT connection ...");
             client.connect(mqtt_client_str.c_str() );
         } else {
-            Serial.print("Attempting MQTT connection (with username/password) ...");
+            Serial.println(now_rfc3339_utc() + " : Attempting MQTT connection (with username/password) ...");
             client.connect(
                 mqtt_client_str.c_str(),
                 config.MQTTBrokerUsername.c_str(),
@@ -879,21 +922,31 @@ void connectMQTTPubSubClient()
             );
         }
 
+        delay(50);
+
         if ( client.connected() ){
 
             client.publish( mqtt_topic_status.c_str(), String(mqtt_client_str + " connected").c_str() );
 
             client.subscribe( mqtt_topic_cmnd.c_str() );
 
+            mqtt_last_connect_fail == 0;
+
             Serial.println("connected");
             return;
         } else {
             Serial.print("failed, rc=");
-            Serial.print(client.state());
-            delay(50);
+            Serial.println(client.state());
 
             if ( PSClient_qtr_sec_count > PSCLIENT_TIMEOUT_QTR_SEC ){
                 Serial.println("failed connect to mqtt. timed out");
+                mqtt_last_connect_fail = now_if_synced();
+
+                // for when time_sync isn't working :
+                if (mqtt_last_connect_fail == 0 ) {
+                    mqtt_last_connect_fail = ( MQTT_RETRY_CONNECT_TIMEOUT * 10 ) ;
+                }
+
                 return;
             }
         }
@@ -921,7 +974,12 @@ void sendMQTTStatus()
     if ( digitalRead(gpio12Relay) == LOW ) relay_state = "off";
     else relay_state = "on";
 
-    client.publish( mqtt_topic_status.c_str(), String("{\"relay\":\"" + relay_state +"\"}").c_str() );
+    String msg = "{\"relay\":\"" + relay_state +"\""
+        + ",\"relay_last_operation_by\":\"" + relay_last_operation_by + "\""
+        + ",\"time\":\"" + now_rfc3339_utc() + "\""
+        + "}";
+
+    client.publish( mqtt_topic_status.c_str(), msg.c_str() );
 
     // TODO : this will see if the ds18b20_therm is enabled. If it is it will be sent in the update.
     // will also send the state of the relay.
