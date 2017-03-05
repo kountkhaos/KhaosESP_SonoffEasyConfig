@@ -159,6 +159,7 @@ String  DEFAULT_SSID         = "MYSSID";
 #define EPA_DEVICE_USERNAME  336
 #define EPA_DEVICE_PASSWORD  386 // 48 bytes
 #define EPA_MQTT_UPDATE_SECS 436 // 4  bytes
+#define EPA_NTP_SERVER       442 // 48  bytes
 
 
 int EP_32_LEN      = 32;
@@ -593,11 +594,9 @@ void WriteConfig()
     WriteStringToEEPROM(EPA_DEVICE_USERNAME, config.DeviceUsername);
     WriteStringToEEPROM(EPA_DEVICE_PASSWORD, config.DevicePassword);
 
-    //TODO FIXME . This needs to go into the web config page :
-    // and to be written to EEPROM here 
-    //config.ntpServerName = "2.uk.pool.ntp.org";
-
     EEPROMWrite_uint32_t(EPA_MQTT_UPDATE_SECS, config.MQTTUpdateQtrSecs);
+
+    WriteStringToEEPROM(EPA_NTP_SERVER, config.ntpServerName);
 
     mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
     mqtt_topic_status = "status/"  + config.MQTTBrokerTopic ;
@@ -704,10 +703,9 @@ boolean ReadConfig()
         config.DeviceUsername = ReadStringFromEEPROM(EPA_DEVICE_USERNAME, EP_STD_STR_LEN);
         config.DevicePassword = ReadStringFromEEPROM(EPA_DEVICE_PASSWORD, EP_STD_STR_LEN);
 
-    //TODO FIXME . This needs to go into the web config page :
-    config.ntpServerName = "2.uk.pool.ntp.org";
-
         config.MQTTUpdateQtrSecs = EEPROMRead_uint32_t(EPA_MQTT_UPDATE_SECS);
+
+        config.ntpServerName = ReadStringFromEEPROM(EPA_NTP_SERVER, EP_STD_STR_LEN);
 
         mqtt_client_str   = "ESP8266-" + config.MQTTBrokerTopic ;
         mqtt_topic_status = "status/"  + config.MQTTBrokerTopic ;

@@ -15,6 +15,7 @@
 WiFiUDP Udp;
 unsigned int ntp_localPort = 8888; // local port to listen for UDP packets
 
+// TODO FIXME , this could be configurable in the web conf :
 #define SYNC_TIME_EVERY_SECS 30
 
 bool time_has_synced = false;

@@ -159,6 +159,9 @@ select {
     HTMLPage += "<tr><td class='fname' colspan='4'>MQTT Update Seconds:</td></tr><tr><td colspan='4'><input type='text' id='mqtt_update_secs' name='mqtt_update_secs' value='"+String( config.MQTTUpdateQtrSecs / 4 )+"'></td></tr>";
     if (errConfig.MQTTBrokerPassword != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.MQTTUpdateQtrSecs + "</td></tr>";
 
+    HTMLPage += "<tr><td class='fname' colspan='4'>NTP Time Server:</td></tr><tr><td colspan='4'><input type='text' id='ntp_server_name' name='ntp_server_name' value='"+ (String) config.ntpServerName +"'></td></tr>";
+    if (errConfig.ntpServerName != "") HTMLPage += "<tr><td colspan='4' class='err'>" + errConfig.ntpServerName + "</td></tr>";
+
     HTMLPage += "<tr><td colspan='4' class='fname'>DS18B20 Therm GPIO-14:</td><td><input type='checkbox' id='ds18b20_therm' name='ds18b20_therm' ";
     if ( config.ds18b20_therm == true ) HTMLPage += "checked";
     HTMLPage += "></td></tr>";
@@ -299,6 +302,14 @@ void cfg_args_parse()
                 else {
                     hasErrCfg = true;
                     errConfig.MQTTBrokerPort = "Invalid, 0 to 65535 only";
+                }
+            }
+
+            if (s_argName == "ntp_server_name"){
+                if ( checkStringStd(s_arg) ) config.ntpServerName = s_arg;
+                else {
+                    hasErrCfg = true;
+                    errConfig.ntpServerName = EP_STD_TOO_LONG;
                 }
             }
 
